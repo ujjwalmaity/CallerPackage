@@ -13,8 +13,7 @@ export 'src/failures.dart';
 
 // https://medium.com/flutter/executing-dart-in-the-background-with-flutter-plugins-and-geofencing-2b3e40a1a124
 class Caller {
-  static const MethodChannel _channel =
-      const MethodChannel('me.leoletto.caller');
+  static const MethodChannel _channel = const MethodChannel('me.leoletto.caller');
 
   /// Register the given callback to be called by the Caller Service
   /// even when the app is on background / closed, since each OS Handles
@@ -47,8 +46,7 @@ class Caller {
     if (!hasPermissions) throw MissingAuthorizationFailure();
 
     final callback = PluginUtilities.getCallbackHandle(_callbackDispatcher);
-    final onEventCallback =
-        PluginUtilities.getCallbackHandle(onEventCallbackDispatcher);
+    final onEventCallback = PluginUtilities.getCallbackHandle(onEventCallbackDispatcher);
 
     try {
       await _channel.invokeMethod('initialize', <dynamic>[
@@ -89,8 +87,7 @@ void _callbackDispatcher() {
   print('me.leoletto - Callback dispatcher called from native code');
 
   // 1. Initialize MethodChannel used to communicate with the platform portion of the plugin.
-  const MethodChannel _backgroundChannel =
-      MethodChannel('me.leoletto.caller_background');
+  const MethodChannel _backgroundChannel = MethodChannel('me.leoletto.caller_background');
 
   // 2. Setup internal state needed for MethodChannels.
   WidgetsFlutterBinding.ensureInitialized();

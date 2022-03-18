@@ -4,5 +4,6 @@ class MissingAuthorizationFailure implements Exception {
 
 class UnableToInitializeFailure implements Exception {
   final String? message;
+
   UnableToInitializeFailure([this.message]);
 }
