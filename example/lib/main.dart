@@ -1,48 +1,23 @@
 import 'package:caller/caller.dart';
 import 'package:flutter/material.dart';
 
-/// Defines a callback that will handle all background incoming events
-///
-/// The duration will only have a value if the current event is `CallerEvent.callEnded`
-Future<void> callerCallbackHandler(
-  CallerEvent event,
-  String number,
-  int? duration,
-) async {
-  print("New event received from native $event");
-  switch (event) {
-    case CallerEvent.callEnded:
-      print(
-          '[ Caller ] Ended a call with number $number and duration $duration');
-      break;
-    case CallerEvent.onMissedCall:
-      print('[ Caller ] Missed a call from number $number');
-      break;
-    case CallerEvent.onIncomingCallAnswered:
-      print('[ Caller ] Accepted call from number $number');
-      break;
-    case CallerEvent.onIncomingCallReceived:
-      print('[ Caller ] Phone is ringing with number $number');
-      break;
-  }
-}
-
-Future<void> initialize() async {
-  /// Check if the user has granted permissions
+Future<void> initializeCaller() async {
+  // Check if the user has granted permissions
   final permission = await Caller.checkPermission();
-  print('Caller permission $permission');
+  debugPrint('Caller permission $permission');
 
-  /// If not, then request user permission to access the Call State
-  if (!permission)
-    Caller.requestPermissions();
-  else
-    Caller.initialize(callerCallbackHandler);
+  // If not, then request user permission to access the Call State
+  if (!permission) {
+    await Caller.requestPermissions();
+  } else {
+    await Caller.initialize();
+  }
 }
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  initialize();
+  initializeCaller();
 
   /// Run your app as you would normally do...
   runApp(MyApp());
@@ -102,6 +77,33 @@ class _MyHomePageState extends State<MyHomePage> {
       // _counter without calling setState(), then the build method would not be
       // called again, and so nothing would appear to happen.
       _counter++;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    Caller.onEvent.listen((CallEvent event) async {
+      debugPrint(event.toString());
+
+      String number = event.number;
+      int? duration = event.duration;
+
+      switch (event.action) {
+        case CallAction.callEnded:
+          debugPrint('[ Caller ] Ended a call with number $number and duration $duration');
+          break;
+        case CallAction.onMissedCall:
+          debugPrint('[ Caller ] Missed a call from number $number');
+          break;
+        case CallAction.onIncomingCallAnswered:
+          debugPrint('[ Caller ] Accepted call from number $number');
+          break;
+        case CallAction.onIncomingCallReceived:
+          debugPrint('[ Caller ] Phone is ringing with number $number');
+          break;
+      }
     });
   }
 
