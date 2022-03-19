@@ -19,10 +19,14 @@ import android.content.ComponentName
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin.FlutterPluginBinding
 
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.PluginRegistry
 
 
@@ -30,72 +34,74 @@ import io.flutter.plugin.common.PluginRegistry
 class CallerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.RequestPermissionsResultListener {
     companion object {
         const val PLUGIN_NAME = "me.leoletto.caller"
-        const val CALLBACK_SHAREDPREFERENCES_KEY = "callerPluginCallbackHandler"
-        const val CALLBACK_USER_SHAREDPREFERENCES_KEY = "callerPluginCallbackHandlerUser"
+        val eventHandler = EventStreamHandler()
     }
 
-    private var channel: MethodChannel? = null
+    /// The MethodChannel that will the communication between Flutter and native Android
+    ///
+    /// This local reference serves to register the plugin with the Flutter Engine and unregister it
+    /// when the Flutter Engine is detached from the Activity
+    private lateinit var method: MethodChannel
+    private lateinit var event: EventChannel
+
     private var currentActivity: Activity? = null
 
-    override fun onAttachedToEngine(flutterPluginBinding: FlutterPluginBinding) {
-        channel = MethodChannel(flutterPluginBinding.binaryMessenger, PLUGIN_NAME)
-        channel!!.setMethodCallHandler(this)
+    override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPluginBinding) {
+        method = MethodChannel(flutterPluginBinding.binaryMessenger, PLUGIN_NAME)
+        event = EventChannel(flutterPluginBinding.binaryMessenger, "MyEvent")
+        method.setMethodCallHandler(this)
+        event.setStreamHandler(eventHandler)
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
-        val arguments = call.arguments as ArrayList<*>?
-        if (call.method == "initialize" && arguments?.size == 2) {
-            if (!doCheckPermission()) {
-                result.error("MISSING_PERMISSION", null, null)
-                return
+        when (call.method) {
+            "initialize" -> {
+                if (!doCheckPermission()) {
+                    result.error("MISSING_PERMISSION", null, null)
+                    return
+                }
+
+                val context = currentActivity!!.applicationContext
+                val receiver = ComponentName(context, CallerPhoneServiceReceiver::class.java)
+                context.packageManager.setComponentEnabledSetting(receiver,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP
+                )
+                Log.d(PLUGIN_NAME, "Service initialized")
+                Log.d(PLUGIN_NAME, receiver.toString())
+                result.success(true)
+
             }
-            val sharedPref = currentActivity!!.getSharedPreferences(PLUGIN_NAME, Context.MODE_PRIVATE)
-            val editor = sharedPref.edit()
-            editor.putLong(CALLBACK_SHAREDPREFERENCES_KEY, (arguments[0] as Long))
-            editor.putLong(CALLBACK_USER_SHAREDPREFERENCES_KEY, (arguments[1] as Long))
-            editor.commit()
+            "stopCaller" -> {
+                val context: Context = currentActivity!!.applicationContext
+                val receiver = ComponentName(context, CallerPhoneServiceReceiver::class.java)
+                val packageManager: PackageManager = context.packageManager
+                packageManager.setComponentEnabledSetting(receiver,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP
+                )
+                result.success(true)
 
-            val context = currentActivity!!.applicationContext
-            val receiver = ComponentName(context, CallerPhoneServiceReceiver::class.java)
-            context.packageManager.setComponentEnabledSetting(receiver,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-            )
-            Log.d(PLUGIN_NAME, "Service initialized")
-            Log.d(PLUGIN_NAME, receiver.toString())
-            result.success(true)
+            }
+            "requestPermissions" -> {
+                Log.d(PLUGIN_NAME, "Requesting permission")
+                requestPermissions()
 
-        } else if (call.method == "stopCaller") {
-            val sharedPref = currentActivity!!.getSharedPreferences(PLUGIN_NAME, Context.MODE_PRIVATE)
-            val editor = sharedPref.edit()
-            editor.remove(CALLBACK_SHAREDPREFERENCES_KEY)
-            editor.remove(CALLBACK_USER_SHAREDPREFERENCES_KEY)
-            val context: Context = currentActivity!!.applicationContext
-            val receiver = ComponentName(context, CallerPhoneServiceReceiver::class.java)
-            val packageManager: PackageManager = context.packageManager
-            packageManager.setComponentEnabledSetting(receiver,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-            )
-            editor.commit()
-            result.success(true)
+            }
+            "checkPermissions" -> {
+                val check = doCheckPermission()
+                Log.d(PLUGIN_NAME, "Permission checked: $check")
+                result.success(check)
 
-        } else if (call.method == "requestPermissions") {
-            Log.d(PLUGIN_NAME, "Requesting permission")
-            requestPermissions()
-
-        } else if (call.method == "checkPermissions") {
-            val check = doCheckPermission()
-            Log.d(PLUGIN_NAME, "Permission checked: $check")
-            result.success(check)
-
-        } else {
-            result.notImplemented()
+            }
+            else -> {
+                result.notImplemented()
+            }
         }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPluginBinding) {
-        channel!!.setMethodCallHandler(null)
+        method.setMethodCallHandler(null)
     }
 
     private fun doCheckPermission(): Boolean {
@@ -148,5 +154,28 @@ class CallerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegi
             999 -> grantResults != null && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
             else -> false
         }
+    }
+}
+
+class EventStreamHandler : EventChannel.StreamHandler {
+
+    private var eventSink: EventChannel.EventSink? = null
+
+    override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
+        eventSink = sink
+    }
+
+    fun send(event: String, arguments: List<Any?>) {
+        val data = mapOf(
+                "event" to event,
+                "arguments" to arguments
+        )
+        Handler(Looper.getMainLooper()).post {
+            eventSink?.success(data)
+        }
+    }
+
+    override fun onCancel(p0: Any?) {
+        eventSink = null
     }
 }
