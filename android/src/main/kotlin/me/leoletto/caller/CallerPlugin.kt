@@ -132,13 +132,13 @@ class CallerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegi
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         currentActivity = binding.activity
         binding.addRequestPermissionsResultListener(this)
-        requestPermissions()
+        // requestPermissions()
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         currentActivity = binding.activity
         binding.addRequestPermissionsResultListener(this)
-        requestPermissions()
+        // requestPermissions()
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
